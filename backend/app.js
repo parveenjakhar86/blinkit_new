@@ -4,24 +4,35 @@ const express = require('express');
 const mongoose = require('mongoose');
 const routes = require('./route');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 
 require('dotenv').config();
 
-
-
-
-console.log('JWT_SECRET:', process.env.JWT_SECRET); // DEBUG: Check if .env is loaded
+const frontendBuildPath = path.join(__dirname, '..', 'frontend', 'build');
 
 // Middleware to parse JSON bodies
 app.use(express.json({ limit: '5mb' }));
 app.use(cors());
+app.use(express.static(frontendBuildPath));
 
 // Mount all API routes under /api
 app.use('/api', routes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(frontendBuildPath, 'index.html'));
+});
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+
+  return res.sendFile(path.join(frontendBuildPath, 'index.html'));
 });
 
 const HOST = process.env.HOST || '0.0.0.0';
