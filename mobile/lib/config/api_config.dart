@@ -2,12 +2,12 @@ import 'package:flutter/foundation.dart';
 
 // API configuration for local network or hosted backend.
 class ApiConfig {
-  // Override at build time for a hosted backend:
+  // Override at build time for a different backend:
   // flutter run --dart-define=API_BASE_URL=https://your-domain.com/api
   // flutter run --dart-define=API_BASE_URL=http://192.168.1.25:5007
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: '',
+    defaultValue: 'https://blinkit-new.onrender.com/api',
   );
 
   // Override only the LAN host when your computer IP changes:
@@ -59,7 +59,21 @@ class ApiConfig {
     return _fallbackBaseUrl;
   }
 
+  static Uri get baseUri => Uri.parse(baseUrl);
+
+  static bool get isHostedBackend => baseUri.scheme == 'https';
+
+  static String get serviceUrl {
+    final pathSegments = List<String>.from(baseUri.pathSegments);
+    if (pathSegments.isNotEmpty && pathSegments.last == 'api') {
+      pathSegments.removeLast();
+    }
+
+    return baseUri.replace(pathSegments: pathSegments).toString();
+  }
+
   static String get login => '$baseUrl/customer/login';
   static String get products => '$baseUrl/products';
   static String get placeOrder => '$baseUrl/orders/place';
+  static String get health => '$serviceUrl/health';
 }
