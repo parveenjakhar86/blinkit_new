@@ -6,4 +6,5 @@ mobile/.idea/
 mobile/android/.gradle/
 mobile/android/.kotlin/
 mobile/android/hs_err_pid*.log
+mobile/android/*.hprof
 mobile/run.log

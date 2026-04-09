@@ -1,10 +1,9 @@
-import 'package:flutter/foundation.dart';
-
 // API configuration for local network or hosted backend.
 class ApiConfig {
   // Override at build time for a different backend:
   // flutter run --dart-define=API_BASE_URL=https://your-domain.com/api
   // flutter run --dart-define=API_BASE_URL=http://192.168.1.25:5007
+  // If not provided, the mobile app uses the hosted Render backend by default.
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: '',
@@ -14,7 +13,7 @@ class ApiConfig {
   // flutter run --dart-define=API_HOST=192.168.1.25:5007
   static const String _configuredHost = String.fromEnvironment(
     'API_HOST',
-    defaultValue: '192.168.1.8:5007',
+    defaultValue: '192.168.68.137:5007',
   );
 
   // Enable this when running on the Android emulator:
@@ -52,13 +51,7 @@ class ApiConfig {
       return normalizeBaseUrl(_configuredBaseUrl);
     }
 
-    if (!kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
-        _useAndroidEmulatorHost) {
-      return _androidEmulatorBaseUrl;
-    }
-
-    return _fallbackBaseUrl;
+    return _hostedBaseUrl;
   }
 
   static List<String> get candidateBaseUrls {
@@ -76,15 +69,13 @@ class ApiConfig {
       return candidates;
     }
 
-    if (!kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
-        _useAndroidEmulatorHost) {
+    addCandidate(_hostedBaseUrl);
+
+    if (_useAndroidEmulatorHost) {
       addCandidate(_androidEmulatorBaseUrl);
-    } else {
+    } else if (_configuredHost.isNotEmpty) {
       addCandidate(_fallbackBaseUrl);
     }
-
-    addCandidate(_hostedBaseUrl);
     return candidates;
   }
 

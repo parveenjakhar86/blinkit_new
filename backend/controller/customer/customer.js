@@ -11,11 +11,14 @@ exports.getAll = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
+    const normalizedPhone = String(req.body.phone || '').replace(/\D/g, '').slice(-10);
     const payload = {
       name: req.body.name,
-      email: req.body.email,
-      phone: req.body.phone || '',
+      email: req.body.email || (normalizedPhone ? `${normalizedPhone}@blinkit.customer` : undefined),
+      phone: normalizedPhone,
       address: req.body.address || '',
+      state: req.body.state || '',
+      pinCode: req.body.pinCode || '',
       password: req.body.password || 'customer123',
       status: req.body.status || 'active'
     };
@@ -33,11 +36,14 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const normalizedPhone = String(req.body.phone || '').replace(/\D/g, '').slice(-10);
     const updateData = {
       name: req.body.name,
-      email: req.body.email,
-      phone: req.body.phone || '',
+      email: req.body.email || (normalizedPhone ? `${normalizedPhone}@blinkit.customer` : undefined),
+      phone: normalizedPhone,
       address: req.body.address || '',
+      state: req.body.state || '',
+      pinCode: req.body.pinCode || '',
       status: req.body.status || 'active'
     };
 

@@ -11,6 +11,8 @@ router.post('/user/login', require('../controller/user/userLoginController').log
 
 // Customer login route
 router.post('/customer/login', require('../controller/customer/customerAuthController').login);
+router.post('/customer/send-otp', require('../controller/customer/customerAuthController').sendOtp);
+router.post('/customer/verify-otp', require('../controller/customer/customerAuthController').verifyOtp);
 
 // Public order placement for customer checkout
 router.post('/orders/place', require('../controller/order').placeOrder);

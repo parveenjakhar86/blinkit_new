@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
+import 'screens/account_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/cart_screen.dart';
@@ -37,9 +38,9 @@ class BlinkitApp extends StatelessWidget {
           textTheme: GoogleFonts.manropeTextTheme(),
           useMaterial3: true,
         ),
-        initialRoute: '/home',
+        home: const _AppBootstrap(),
         routes: {
-          '/': (ctx) => const HomeScreen(),
+          '/account': (ctx) => const AccountScreen(),
           '/login': (ctx) => const LoginScreen(),
           '/home': (ctx) => const HomeScreen(),
           '/cart': (ctx) => const CartScreen(),
@@ -47,5 +48,28 @@ class BlinkitApp extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+class _AppBootstrap extends StatelessWidget {
+  const _AppBootstrap();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+
+    if (!auth.isReady) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF0C831F)),
+        ),
+      );
+    }
+
+    if (auth.isLoggedIn) {
+      return const HomeScreen();
+    }
+
+    return const LoginScreen();
   }
 }

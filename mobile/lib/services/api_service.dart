@@ -54,6 +54,61 @@ class ApiService {
     return Uri.parse(ApiConfig.endpointFor(baseUrl, path));
   }
 
+  static Future<http.Response> postJsonWithFallback(
+    String path, {
+    required Map<String, dynamic> body,
+    Map<String, String>? headers,
+    String? fallbackMessage,
+  }) async {
+    ApiException? lastApiError;
+
+    for (final baseUrl in _baseCandidates) {
+      final uri = Uri.parse(ApiConfig.endpointFor(baseUrl, path));
+
+      try {
+        final response = await _postWithRetry(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            ...?headers,
+          },
+          body: jsonEncode(body),
+          timeout: _requestTimeoutFor(baseUrl),
+        );
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          _activeBaseUrl = baseUrl;
+          return response;
+        }
+
+        lastApiError = ApiException(
+          _extractMessage(response) ??
+              fallbackMessage ??
+              'Unable to complete the request.',
+        );
+
+        if (!_shouldTryNextBase(response.statusCode)) {
+          throw lastApiError;
+        }
+      } catch (error) {
+        if (error is ApiException) {
+          rethrow;
+        }
+
+        if (!_shouldFallbackToAnotherBase(error)) {
+          throw _mapRequestError(
+            error,
+            fallbackMessage:
+                fallbackMessage ?? 'Unable to complete the request.',
+          );
+        }
+      }
+    }
+
+    throw lastApiError ??
+        ApiException(fallbackMessage ?? 'Unable to complete the request.');
+  }
+
   static Future<List<Product>> fetchProducts() async {
     ApiException? lastApiError;
     final cachedProducts = await _readCachedProducts();
@@ -211,7 +266,11 @@ class ApiService {
           'paymentMethod': paymentMethod,
           'totalAmount': totalAmount,
         }),
-        timeout: _requestTimeoutFor(uri.replace(path: '').toString()),
+        timeout: _requestTimeoutFor(
+          ApiConfig.normalizeBaseUrl(
+            uri.replace(path: '/api').toString(),
+          ),
+        ),
       );
 
       final data = _decodeJsonMap(resp);

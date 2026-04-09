@@ -15,6 +15,7 @@ class AuthProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _savedAddresses = [];
   String? _selectedAddressId;
   bool _loading = false;
+  bool _isReady = false;
   String? _error;
 
   String? get token => _token;
@@ -23,8 +24,23 @@ class AuthProvider extends ChangeNotifier {
     _savedAddresses,
   );
   bool get loading => _loading;
+  bool get isReady => _isReady;
   String? get error => _error;
   bool get isLoggedIn => _token != null;
+
+  Map<String, dynamic>? _decodeMapOrNull(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        return decoded.map(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
 
   Map<String, dynamic>? get selectedAddress {
     for (final address in _savedAddresses) {
@@ -36,32 +52,125 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> loadFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString(_tokenPrefKey);
-    final customerJson = prefs.getString(_profilePrefKey);
-    if (customerJson != null) {
-      _customer = jsonDecode(customerJson);
-    }
-    final savedAddressesJson = prefs.getString(_savedAddressesPrefKey);
-    if (savedAddressesJson != null) {
-      final decoded = jsonDecode(savedAddressesJson);
-      if (decoded is List) {
-        _savedAddresses = decoded
-            .whereType<Map>()
-            .map(
-              (entry) => _normalizeAddress(
-                entry.map(
-                  (key, value) => MapEntry(key.toString(), value),
-                ),
-              ),
-            )
-            .where((entry) => entry['address'].toString().trim().isNotEmpty)
-            .toList();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _token = prefs.getString(_tokenPrefKey);
+      final customerJson = prefs.getString(_profilePrefKey);
+      if (customerJson != null) {
+        _customer = jsonDecode(customerJson);
       }
+      final savedAddressesJson = prefs.getString(_savedAddressesPrefKey);
+      if (savedAddressesJson != null) {
+        final decoded = jsonDecode(savedAddressesJson);
+        if (decoded is List) {
+          _savedAddresses = decoded
+              .whereType<Map>()
+              .map(
+                (entry) => _normalizeAddress(
+                  entry.map(
+                    (key, value) => MapEntry(key.toString(), value),
+                  ),
+                ),
+              )
+              .where((entry) => entry['address'].toString().trim().isNotEmpty)
+              .toList();
+        }
+      }
+      _selectedAddressId = prefs.getString(_selectedAddressIdPrefKey);
+      _ensureAddressBookSeeded();
+    } finally {
+      _isReady = true;
+      notifyListeners();
     }
-    _selectedAddressId = prefs.getString(_selectedAddressIdPrefKey);
-    _ensureAddressBookSeeded();
+  }
+
+  Future<String?> requestOtp(String phone, {String name = ''}) async {
+    _loading = true;
+    _error = null;
     notifyListeners();
+
+    try {
+      final resp = await ApiService.postJsonWithFallback(
+        'customer/send-otp',
+        body: {'phone': phone, 'name': name},
+        fallbackMessage:
+            'Send OTP failed. Render is unavailable and the local Wi-Fi backend could not be reached.',
+      );
+      final data = _decodeMapOrNull(resp.body);
+
+      if (resp.statusCode == 200) {
+        _loading = false;
+        notifyListeners();
+        return data?['otp']?.toString();
+      }
+
+      _error = data?['message']?.toString() ??
+          'Send OTP failed. Use the updated local backend or deploy the new backend routes.';
+      _loading = false;
+      notifyListeners();
+      return null;
+    } on ApiException catch (error) {
+      _error = error.message;
+      _loading = false;
+      notifyListeners();
+      return null;
+    } catch (_) {
+      _error =
+          'Cannot reach OTP service. Render is unavailable and the local Wi-Fi backend could not be reached.';
+      _loading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> verifyOtp({
+    required String phone,
+    required String otp,
+    String name = '',
+  }) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final resp = await ApiService.postJsonWithFallback(
+        'customer/verify-otp',
+        body: {'phone': phone, 'otp': otp, 'name': name},
+        fallbackMessage:
+            'OTP verification failed. Render is unavailable and the local Wi-Fi backend could not be reached.',
+      );
+      final data = _decodeMapOrNull(resp.body);
+
+      if (resp.statusCode == 200) {
+        _token = data?['token']?.toString();
+        _customer = (data?['customer'] as Map?)?.map(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+        _ensureAddressBookSeeded();
+        final prefs = await SharedPreferences.getInstance();
+        await _persistToPrefs(prefs);
+        _loading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error = data?['message']?.toString() ??
+          'OTP verification failed. Use the updated local backend or deploy the new backend routes.';
+      _loading = false;
+      notifyListeners();
+      return false;
+    } on ApiException catch (error) {
+      _error = error.message;
+      _loading = false;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error =
+          'Cannot reach OTP verification service. Render is unavailable and the local Wi-Fi backend could not be reached.';
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> login(String email, String password) async {
@@ -97,6 +206,12 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  void clearError() {
+    if (_error == null) return;
+    _error = null;
+    notifyListeners();
   }
 
   Future<void> logout() async {

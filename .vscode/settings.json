@@ -1,0 +1,16 @@
+{
+  "dart.flutterSdkPath": "E:\\flutter",
+  "dart.sdkPath": "E:\\flutter\\bin\\cache\\dart-sdk",
+  "files.watcherExclude": {
+    "**/frontend/node_modules/**": true,
+    "**/frontend/node_modules/.cache/**": true,
+    "**/frontend/build/**": true,
+    "**/mobile/build/**": true
+  },
+  "search.exclude": {
+    "**/frontend/node_modules": true,
+    "**/frontend/node_modules/.cache": true,
+    "**/frontend/build": true,
+    "**/mobile/build": true
+  }
+}
