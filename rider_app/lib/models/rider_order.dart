@@ -22,4 +22,19 @@ class RiderOrder {
   final int dropEtaMin;
   final String status;
   final String priority;
+
+  factory RiderOrder.fromJson(Map<String, dynamic> json) {
+    return RiderOrder(
+      id: (json['id'] ?? '').toString(),
+      customerName: (json['customerName'] ?? 'Customer').toString(),
+      area: (json['area'] ?? '').toString(),
+      items: (json['items'] as num?)?.toInt() ?? 0,
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
+      pickupEtaMin: (json['pickupEtaMin'] as num?)?.toInt() ?? 0,
+      dropEtaMin: (json['dropEtaMin'] as num?)?.toInt() ?? 0,
+      status: (json['status'] ?? 'available').toString(),
+      priority: (json['priority'] ?? 'Normal').toString(),
+    );
+  }
 }

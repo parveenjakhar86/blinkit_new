@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/rider_auth_provider.dart';
+import '../providers/rider_orders_provider.dart';
 import '../screens/login_screen.dart';
 import '../screens/home_shell.dart';
 
@@ -37,8 +38,20 @@ class RiderApp extends StatelessWidget {
           ),
         ),
       ),
-      home: ChangeNotifierProvider(
-        create: (_) => RiderAuthProvider()..loadFromPrefs(),
+      home: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(
+            create: (_) => RiderAuthProvider()..loadFromPrefs(),
+          ),
+          ChangeNotifierProxyProvider<RiderAuthProvider, RiderOrdersProvider>(
+            create: (_) => RiderOrdersProvider(),
+            update: (_, auth, orders) {
+              final provider = orders ?? RiderOrdersProvider();
+              provider.updateToken(auth.token);
+              return provider;
+            },
+          ),
+        ],
         child: const _AppBootstrap(),
       ),
       routes: {

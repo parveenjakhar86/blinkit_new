@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../data/mock_rider_data.dart';
 import '../models/rider_order.dart';
 import '../providers/rider_auth_provider.dart';
+import '../providers/rider_orders_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -16,9 +17,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isOnline = true;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RiderOrdersProvider>().fetchOrders();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final rider = context.watch<RiderAuthProvider>().rider;
+    final orders = context.watch<RiderOrdersProvider>();
     final displayName = (rider?['name'] ?? riderName).toString();
+    final liveOrders = orders.activeOrders.isEmpty ? activeOrders : orders.activeOrders;
 
     return CustomScrollView(
       slivers: [
@@ -32,11 +43,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 18),
                 _buildOnlineCard(),
                 const SizedBox(height: 18),
-                _buildMetricsGrid(),
+                _buildMetricsGrid(liveOrders.length),
                 const SizedBox(height: 18),
-                _buildSectionTitle('Live orders', '2 active'),
+                _buildSectionTitle('Live orders', '${liveOrders.length} active'),
                 const SizedBox(height: 12),
-                ...activeOrders.map(_buildOrderCard),
+                if (orders.loadingOrders)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (liveOrders.isEmpty)
+                  _buildEmptyState('No active rider orders right now.')
+                else
+                  ...liveOrders.map(_buildOrderCard),
                 const SizedBox(height: 18),
                 _buildSectionTitle('Hot zones', 'Best earning areas'),
                 const SizedBox(height: 12),
@@ -146,11 +165,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildMetricsGrid() {
+  Widget _buildMetricsGrid(int liveOrderCount) {
+    final metrics = [
+      RiderMetric('Live Orders', '$liveOrderCount'),
+      ...todayMetrics.skip(1),
+    ];
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: todayMetrics.length,
+      itemCount: metrics.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         mainAxisExtent: 110,
@@ -158,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         mainAxisSpacing: 12,
       ),
       itemBuilder: (context, index) {
-        final metric = todayMetrics[index];
+        final metric = metrics[index];
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -186,6 +209,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState(String label) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF667085),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 

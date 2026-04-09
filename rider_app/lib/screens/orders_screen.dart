@@ -1,13 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../data/mock_rider_data.dart';
 import '../models/rider_order.dart';
+import '../providers/rider_orders_provider.dart';
 
-class OrdersScreen extends StatelessWidget {
+class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
   @override
+  State<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends State<OrdersScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RiderOrdersProvider>().fetchOrders();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final provider = context.watch<RiderOrdersProvider>();
+    final active = provider.activeOrders;
+    final available = provider.availableOrders;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       children: [
@@ -31,15 +49,48 @@ class OrdersScreen extends StatelessWidget {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 12),
-        ...activeOrders.map((order) => _OrderTile(order: order, emphasize: true)),
+        if (provider.loadingOrders)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (active.isEmpty)
+          const _EmptyCard(label: 'No active deliveries yet.')
+        else
+          ...active.map((order) => _OrderTile(order: order, emphasize: true)),
         const SizedBox(height: 18),
         const Text(
           'Available nearby',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 12),
-        ...availableOrders.map((order) => _OrderTile(order: order)),
+        if (!provider.loadingOrders && available.isEmpty)
+          const _EmptyCard(label: 'No nearby orders are available right now.')
+        else
+          ...available.map((order) => _OrderTile(order: order)),
       ],
+    );
+  }
+}
+
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF667085),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -85,6 +136,7 @@ class _OrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.read<RiderOrdersProvider>();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Card(
@@ -131,15 +183,30 @@ class _OrderTile extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(order.area)),
+                        );
+                      },
                       child: const Text('View route'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton(
-                      onPressed: () {},
-                      child: Text(emphasize ? 'Update status' : 'Accept order'),
+                      onPressed: () async {
+                        if (emphasize) {
+                          final nextStatus = order.status == 'accepted' ? 'picked_up' : 'delivered';
+                          await provider.updateOrderStatus(order.id, nextStatus);
+                        } else {
+                          await provider.acceptOrder(order.id);
+                        }
+                      },
+                      child: Text(
+                        emphasize
+                            ? (order.status == 'accepted' ? 'Mark picked up' : 'Mark delivered')
+                            : 'Accept order',
+                      ),
                     ),
                   ),
                 ],

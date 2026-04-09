@@ -33,12 +33,17 @@ router.get('/products', async (req, res) => {
 });
 
 // Example protected admin route (replace with real management routes)
-const { adminAuth, customerAuth } = require('../middleware');
+const { adminAuth, customerAuth, riderAuth } = require('../middleware');
 router.get('/admin/protected', adminAuth, (req, res) => {
 	res.json({ message: 'You are authenticated as admin', user: req.user });
 });
 
 router.get('/customer/orders', customerAuth, require('../controller/order').getCustomerOrders);
+
+router.get('/rider/orders', riderAuth, require('../controller/rider/riderController').getOrders);
+router.post('/rider/orders/:id/accept', riderAuth, require('../controller/rider/riderController').acceptOrder);
+router.patch('/rider/orders/:id/status', riderAuth, require('../controller/rider/riderController').updateOrderStatus);
+router.get('/rider/earnings', riderAuth, require('../controller/rider/riderController').getEarnings);
 
 
 

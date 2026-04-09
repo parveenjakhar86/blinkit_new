@@ -1,12 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../data/mock_rider_data.dart';
+import '../providers/rider_orders_provider.dart';
 
-class EarningsScreen extends StatelessWidget {
+class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
 
   @override
+  State<EarningsScreen> createState() => _EarningsScreenState();
+}
+
+class _EarningsScreenState extends State<EarningsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RiderOrdersProvider>().fetchEarnings();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final provider = context.watch<RiderOrdersProvider>();
+    final earnings = provider.earnings;
+    final bars = earnings?.weeklyBars ?? weeklyBars;
+    final metrics = earnings == null
+        ? earningsMetrics
+        : [
+            RiderMetric('Today', 'Rs ${earnings.today.toStringAsFixed(0)}'),
+            RiderMetric('This Week', 'Rs ${earnings.week.toStringAsFixed(0)}'),
+            RiderMetric('Incentives', 'Rs ${earnings.incentives.toStringAsFixed(0)}'),
+            RiderMetric('Wallet Balance', 'Rs ${earnings.walletBalance.toStringAsFixed(0)}'),
+          ];
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       children: [
@@ -29,8 +56,8 @@ class EarningsScreen extends StatelessWidget {
                 style: TextStyle(color: Color(0xFFCBD5E1)),
               ),
               const SizedBox(height: 10),
-              const Text(
-                'Rs 8,940',
+              Text(
+                'Rs ${(earnings?.week ?? 8940).toStringAsFixed(0)}',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 34,
@@ -38,14 +65,16 @@ class EarningsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Next settlement: Friday, 6:00 PM',
+              Text(
+                earnings?.nextSettlement.isNotEmpty == true
+                    ? 'Next settlement: ${earnings!.nextSettlement}'
+                    : 'Next settlement: Friday, 6:00 PM',
                 style: TextStyle(color: Color(0xFF94A3B8)),
               ),
               const SizedBox(height: 22),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
-                children: weeklyBars
+                children: bars
                     .map(
                       (value) => Expanded(
                         child: Padding(
@@ -74,7 +103,7 @@ class EarningsScreen extends StatelessWidget {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: earningsMetrics.length,
+          itemCount: metrics.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             mainAxisSpacing: 12,
@@ -82,7 +111,7 @@ class EarningsScreen extends StatelessWidget {
             mainAxisExtent: 108,
           ),
           itemBuilder: (context, index) {
-            final metric = earningsMetrics[index];
+            final metric = metrics[index];
             return Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),
