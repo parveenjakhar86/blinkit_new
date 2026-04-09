@@ -36,6 +36,8 @@ function toRiderPayload(rider) {
     phone: rider.phone,
     vehicleNumber: rider.vehicleNumber,
     zone: rider.zone,
+    availabilityStatus: rider.availabilityStatus,
+    lastSeenAt: rider.lastSeenAt,
     status: rider.status,
     createdAt: rider.createdAt,
     updatedAt: rider.updatedAt,
@@ -60,6 +62,7 @@ exports.sendOtp = async (req, res) => {
         name: name || 'Rider',
         email: buildRiderEmail(phone),
         phone,
+        availabilityStatus: 'offline',
         status: 'active',
         pendingOtp: otp,
         pendingOtpExpiresAt: expiresAt,
@@ -134,6 +137,7 @@ exports.verifyOtp = async (req, res) => {
 
     rider.pendingOtp = null;
     rider.pendingOtpExpiresAt = null;
+    rider.lastSeenAt = new Date();
     await rider.save();
 
     const token = signRiderToken(rider);

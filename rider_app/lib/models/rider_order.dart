@@ -1,6 +1,7 @@
 class RiderOrder {
   const RiderOrder({
     required this.id,
+    required this.orderNumber,
     required this.customerName,
     required this.area,
     required this.items,
@@ -13,6 +14,7 @@ class RiderOrder {
   });
 
   final String id;
+  final String orderNumber;
   final String customerName;
   final String area;
   final int items;
@@ -26,6 +28,7 @@ class RiderOrder {
   factory RiderOrder.fromJson(Map<String, dynamic> json) {
     return RiderOrder(
       id: (json['id'] ?? '').toString(),
+      orderNumber: (json['orderNumber'] ?? '').toString(),
       customerName: (json['customerName'] ?? 'Customer').toString(),
       area: (json['area'] ?? '').toString(),
       items: (json['items'] as num?)?.toInt() ?? 0,
@@ -36,5 +39,15 @@ class RiderOrder {
       status: (json['status'] ?? 'available').toString(),
       priority: (json['priority'] ?? 'Normal').toString(),
     );
+  }
+
+  String get displayOrderLabel {
+    if (orderNumber.trim().isNotEmpty) {
+      return orderNumber.trim();
+    }
+    if (id.length > 8) {
+      return id.substring(id.length - 8).toUpperCase();
+    }
+    return id.toUpperCase();
   }
 }

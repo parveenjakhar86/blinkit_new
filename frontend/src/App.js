@@ -4,6 +4,7 @@ import AdminLogin from './admin/AdminLogin';
 import AdminDashboard from './admin/AdminDashboard';
 import UserManagement from './admin/user/UserManagement';
 import CustomerManagement from './admin/customer/CustomerManagement';
+import RiderManagement from './admin/rider/RiderManagement';
 import OrderManagement from './admin/order/OrderManagement';
 import ProductManagement from './admin/product/ProductManagement';
 import AdminSidebar from './admin/AdminSidebar';
@@ -13,7 +14,7 @@ import { clearAuthSession, getAdminToken, getManagerToken } from './utils/auth';
 
 // Main app with customer and admin flows
 export default function App() {
-  const [adminStep, setAdminStep] = useState('customer'); // 'customer', 'login', 'dashboard', 'user', 'customer-management', 'order', 'product', 'manager-login', 'manager-dashboard'
+  const [adminStep, setAdminStep] = useState('customer'); // 'customer', 'login', 'dashboard', 'user', 'customer-management', 'rider-management', 'order', 'product', 'manager-login', 'manager-dashboard'
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [isManagerLoggedIn, setIsManagerLoggedIn] = useState(false);
 
@@ -22,7 +23,7 @@ export default function App() {
     const adminToken = getAdminToken();
     setIsAdminLoggedIn(!!adminToken);
     if (adminToken && adminStep === 'login') setAdminStep('dashboard');
-    if (!adminToken && ["dashboard", "user", "customer-management"].includes(adminStep)) setAdminStep('login');
+    if (!adminToken && ["dashboard", "user", "customer-management", "rider-management"].includes(adminStep)) setAdminStep('login');
 
     const managerToken = getManagerToken();
     setIsManagerLoggedIn(!!managerToken);
@@ -51,11 +52,12 @@ export default function App() {
   if (adminStep === 'manager-login') return <UserLogin onLogin={() => { setIsManagerLoggedIn(true); setAdminStep('manager-dashboard'); }} onBack={() => setAdminStep('login')} />;
 
   // Admin pages with sidebar (protected)
-  if (["dashboard", "user", "customer-management", "order", "product"].includes(adminStep) && isAdminLoggedIn) {
+  if (["dashboard", "user", "customer-management", "rider-management", "order", "product"].includes(adminStep) && isAdminLoggedIn) {
     let content = null;
     if (adminStep === 'dashboard') content = <AdminDashboard onNavigate={handleAdminNavigate} />;
     if (adminStep === 'user') content = <UserManagement />;
     if (adminStep === 'customer-management') content = <CustomerManagement />;
+    if (adminStep === 'rider-management') content = <RiderManagement />;
     if (adminStep === 'order') content = <OrderManagement />;
     if (adminStep === 'product') content = <ProductManagement />;
     return (
@@ -72,7 +74,7 @@ export default function App() {
     if (adminStep === 'product') content = <ProductManagement />;
     return (
       <div className="flex min-h-screen bg-gray-50">
-        <AdminSidebar current={adminStep} onNavigate={handleAdminNavigate} onLogout={handleManagerLogout} hideUserManagement={true} hideCustomerManagement={true} />
+        <AdminSidebar current={adminStep} onNavigate={handleAdminNavigate} onLogout={handleManagerLogout} hideUserManagement={true} hideCustomerManagement={true} hideRiderManagement={true} />
         <div className="flex-1">{content}</div>
       </div>
     );
@@ -82,7 +84,7 @@ export default function App() {
   if (adminStep === 'manager-dashboard' && isManagerLoggedIn) {
     return (
       <div className="flex min-h-screen bg-gray-50">
-        <AdminSidebar current={adminStep} onNavigate={handleAdminNavigate} onLogout={handleManagerLogout} hideUserManagement={true} hideCustomerManagement={true} />
+        <AdminSidebar current={adminStep} onNavigate={handleAdminNavigate} onLogout={handleManagerLogout} hideUserManagement={true} hideCustomerManagement={true} hideRiderManagement={true} />
         <div className="flex-1">
           <AdminDashboard onNavigate={handleAdminNavigate} hideUserManagement={true} />
         </div>

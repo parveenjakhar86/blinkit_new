@@ -44,6 +44,7 @@ router.get('/rider/orders', riderAuth, require('../controller/rider/riderControl
 router.post('/rider/orders/:id/accept', riderAuth, require('../controller/rider/riderController').acceptOrder);
 router.patch('/rider/orders/:id/status', riderAuth, require('../controller/rider/riderController').updateOrderStatus);
 router.get('/rider/earnings', riderAuth, require('../controller/rider/riderController').getEarnings);
+router.patch('/rider/availability', riderAuth, require('../controller/rider/riderController').updateAvailability);
 
 
 
@@ -52,6 +53,7 @@ router.use('/admin/users', require('./user'));
 router.use('/admin/customers', require('./customer'));
 router.use('/admin/orders', require('./order'));
 router.use('/admin/products', require('./product'));
+router.use('/admin/riders', require('./rider'));
 
 // Export the router to be used in app.js
 module.exports = router;

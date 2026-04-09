@@ -40,6 +40,7 @@ const weeklyBars = <double>[0.45, 0.72, 0.58, 0.91, 0.87, 0.63, 0.41];
 const activeOrders = <RiderOrder>[
   RiderOrder(
     id: 'BLK-3021',
+    orderNumber: 'BLK-3021',
     customerName: 'Riya Sharma',
     area: 'Sector 14',
     items: 7,
@@ -52,6 +53,7 @@ const activeOrders = <RiderOrder>[
   ),
   RiderOrder(
     id: 'BLK-3024',
+    orderNumber: 'BLK-3024',
     customerName: 'Vikram Singh',
     area: 'Model Town',
     items: 4,
@@ -67,6 +69,7 @@ const activeOrders = <RiderOrder>[
 const availableOrders = <RiderOrder>[
   RiderOrder(
     id: 'BLK-3030',
+    orderNumber: 'BLK-3030',
     customerName: 'Arjun Mehta',
     area: 'Civil Lines',
     items: 11,
@@ -79,6 +82,7 @@ const availableOrders = <RiderOrder>[
   ),
   RiderOrder(
     id: 'BLK-3032',
+    orderNumber: 'BLK-3032',
     customerName: 'Nisha Gupta',
     area: 'Green Park',
     items: 5,
@@ -91,6 +95,7 @@ const availableOrders = <RiderOrder>[
   ),
   RiderOrder(
     id: 'BLK-3035',
+    orderNumber: 'BLK-3035',
     customerName: 'Karan Bedi',
     area: 'Shastri Nagar',
     items: 8,

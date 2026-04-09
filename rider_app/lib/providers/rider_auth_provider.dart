@@ -144,6 +144,59 @@ class RiderAuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateAvailability(bool isOnline) async {
+    if (_token == null) {
+      _error = 'Rider login required.';
+      notifyListeners();
+      return false;
+    }
+
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final resp = await ApiService.patchJsonWithFallback(
+        'rider/availability',
+        body: {
+          'availabilityStatus': isOnline ? 'online' : 'offline',
+        },
+        headers: {
+          'Authorization': 'Bearer $_token',
+        },
+        fallbackMessage:
+            'Availability update failed. Render is unavailable and the local Wi-Fi backend could not be reached.',
+      );
+      final data = _decodeMapOrNull(resp.body);
+
+      if (resp.statusCode == 200) {
+        _rider = (data?['rider'] as Map?)?.map(
+              (key, value) => MapEntry(key.toString(), value),
+            ) ??
+            _rider;
+        await _persistToPrefs();
+        _loading = false;
+        notifyListeners();
+        return true;
+      }
+
+      _error = data?['message']?.toString() ?? 'Availability update failed.';
+      _loading = false;
+      notifyListeners();
+      return false;
+    } on ApiException catch (error) {
+      _error = error.message;
+      _loading = false;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = 'Cannot reach rider availability service.';
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     _token = null;
     _rider = null;

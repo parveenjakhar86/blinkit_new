@@ -14,50 +14,50 @@ class RiderApp extends StatelessWidget {
     const primary = Color(0xFF0B7A34);
     const surface = Color(0xFFF4F6F1);
 
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Blinkit Rider',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: primary,
-          primary: primary,
-          surface: surface,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => RiderAuthProvider()..loadFromPrefs(),
         ),
-        scaffoldBackgroundColor: surface,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
+        ChangeNotifierProxyProvider<RiderAuthProvider, RiderOrdersProvider>(
+          create: (_) => RiderOrdersProvider(),
+          update: (_, auth, orders) {
+            final provider = orders ?? RiderOrdersProvider();
+            provider.updateToken(auth.token);
+            return provider;
+          },
         ),
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Blinkit Rider',
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: primary,
+            primary: primary,
+            surface: surface,
+          ),
+          scaffoldBackgroundColor: surface,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+          ),
+          cardTheme: CardThemeData(
+            color: Colors.white,
+            elevation: 0,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
           ),
         ),
+        home: const _AppBootstrap(),
+        routes: {
+          '/login': (_) => const LoginScreen(),
+          '/home': (_) => const HomeShell(),
+        },
       ),
-      home: MultiProvider(
-        providers: [
-          ChangeNotifierProvider(
-            create: (_) => RiderAuthProvider()..loadFromPrefs(),
-          ),
-          ChangeNotifierProxyProvider<RiderAuthProvider, RiderOrdersProvider>(
-            create: (_) => RiderOrdersProvider(),
-            update: (_, auth, orders) {
-              final provider = orders ?? RiderOrdersProvider();
-              provider.updateToken(auth.token);
-              return provider;
-            },
-          ),
-        ],
-        child: const _AppBootstrap(),
-      ),
-      routes: {
-        '/login': (_) => const LoginScreen(),
-        '/home': (_) => const HomeShell(),
-      },
     );
   }
 }

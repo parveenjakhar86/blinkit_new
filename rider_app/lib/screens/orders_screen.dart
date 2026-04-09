@@ -147,11 +147,15 @@ class _OrderTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    order.id,
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                  Expanded(
+                    child: Text(
+                      order.displayOrderLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 12),
                   Text(
                     'Rs ${order.amount.toStringAsFixed(0)}',
                     style: TextStyle(
@@ -165,6 +169,8 @@ class _OrderTile extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 '${order.customerName} • ${order.area}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF667085),

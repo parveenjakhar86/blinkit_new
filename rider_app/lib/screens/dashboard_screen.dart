@@ -14,8 +14,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  bool _isOnline = true;
-
   @override
   void initState() {
     super.initState();
@@ -26,10 +24,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final rider = context.watch<RiderAuthProvider>().rider;
+    final auth = context.watch<RiderAuthProvider>();
+    final rider = auth.rider;
     final orders = context.watch<RiderOrdersProvider>();
     final displayName = (rider?['name'] ?? riderName).toString();
     final liveOrders = orders.activeOrders.isEmpty ? activeOrders : orders.activeOrders;
+    final isOnline = (rider?['availabilityStatus'] ?? 'offline') == 'online';
 
     return CustomScrollView(
       slivers: [
@@ -41,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 _buildHeader(displayName),
                 const SizedBox(height: 18),
-                _buildOnlineCard(),
+                _buildOnlineCard(isOnline, auth.loading),
                 const SizedBox(height: 18),
                 _buildMetricsGrid(liveOrders.length),
                 const SizedBox(height: 18),
@@ -107,8 +107,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildOnlineCard() {
-    final bg = _isOnline ? const Color(0xFF0E8A39) : const Color(0xFF2F3136);
+  Widget _buildOnlineCard(bool isOnline, bool isUpdating) {
+    final bg = isOnline ? const Color(0xFF0E8A39) : const Color(0xFF2F3136);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -125,13 +125,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: _isOnline ? const Color(0xFFB2F5C0) : const Color(0xFF9CA3AF),
+                  color: isOnline ? const Color(0xFFB2F5C0) : const Color(0xFF9CA3AF),
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 10),
               Text(
-                _isOnline ? 'You are online' : 'You are offline',
+                isOnline ? 'You are online' : 'You are offline',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 20,
@@ -155,10 +155,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               foregroundColor: bg,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             ),
-            onPressed: () {
-              setState(() => _isOnline = !_isOnline);
-            },
-            child: Text(_isOnline ? 'Go offline' : 'Go online'),
+            onPressed: isUpdating
+                ? null
+                : () async {
+                    await context.read<RiderAuthProvider>().updateAvailability(!isOnline);
+                  },
+            child: Text(isOnline ? 'Go offline' : 'Go online'),
           ),
         ],
       ),

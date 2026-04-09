@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const Order = require('../../model/Order');
+const Rider = require('../../model/Rider');
 
 function buildAddress(details = {}) {
   return [details.address, details.state, details.pinCode]
@@ -119,6 +120,10 @@ exports.acceptOrder = async (req, res) => {
       return res.status(404).json({ message: 'Order is no longer available' });
     }
 
+    await Rider.findByIdAndUpdate(req.user.riderId, {
+      $set: { lastSeenAt: new Date() },
+    });
+
     return res.json({ message: 'Order accepted', order: toRiderOrder(order) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to accept order' });
@@ -150,9 +155,55 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     await order.save();
+    await Rider.findByIdAndUpdate(req.user.riderId, {
+      $set: { lastSeenAt: new Date() },
+    });
     return res.json({ message: 'Order status updated', order: toRiderOrder(order) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to update rider order status' });
+  }
+};
+
+exports.updateAvailability = async (req, res) => {
+  try {
+    const availabilityStatus = String(req.body.availabilityStatus || '').toLowerCase();
+    if (!['offline', 'online'].includes(availabilityStatus)) {
+      return res.status(400).json({ message: 'Invalid availability status' });
+    }
+
+    const rider = await Rider.findByIdAndUpdate(
+      req.user.riderId,
+      {
+        $set: {
+          availabilityStatus,
+          lastSeenAt: new Date(),
+        },
+      },
+      { new: true }
+    );
+
+    if (!rider) {
+      return res.status(404).json({ message: 'Rider not found' });
+    }
+
+    return res.json({
+      message: 'Availability updated',
+      rider: {
+        _id: rider._id,
+        name: rider.name,
+        email: rider.email,
+        phone: rider.phone,
+        vehicleNumber: rider.vehicleNumber,
+        zone: rider.zone,
+        availabilityStatus: rider.availabilityStatus,
+        lastSeenAt: rider.lastSeenAt,
+        status: rider.status,
+        createdAt: rider.createdAt,
+        updatedAt: rider.updatedAt,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to update rider availability' });
   }
 };
 

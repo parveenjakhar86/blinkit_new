@@ -4,11 +4,12 @@ const navItems = [
   { key: 'dashboard', label: 'Dashboard', icon: '🏠' },
   { key: 'user', label: 'User Management', icon: '👤' },
   { key: 'customer-management', label: 'Customer Management', icon: '🧑' },
+  { key: 'rider-management', label: 'Rider Management', icon: '🛵' },
   { key: 'order', label: 'Order Management', icon: '📦' },
   { key: 'product', label: 'Product Management', icon: '🛒' },
 ];
 
-export default function AdminSidebar({ current, onNavigate, onLogout, hideUserManagement, hideCustomerManagement }) {
+export default function AdminSidebar({ current, onNavigate, onLogout, hideUserManagement, hideCustomerManagement, hideRiderManagement }) {
   return (
     <aside className="h-screen w-64 bg-white shadow-lg flex flex-col py-8 px-0 border-r border-gray-100">
       <div className="flex items-center justify-center mb-10">
@@ -18,6 +19,7 @@ export default function AdminSidebar({ current, onNavigate, onLogout, hideUserMa
         {navItems
           .filter(item => !(hideUserManagement && item.key === 'user'))
           .filter(item => !(hideCustomerManagement && item.key === 'customer-management'))
+          .filter(item => !(hideRiderManagement && item.key === 'rider-management'))
           .map(item => (
           <button
             key={item.key}
