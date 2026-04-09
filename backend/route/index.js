@@ -14,6 +14,10 @@ router.post('/customer/login', require('../controller/customer/customerAuthContr
 router.post('/customer/send-otp', require('../controller/customer/customerAuthController').sendOtp);
 router.post('/customer/verify-otp', require('../controller/customer/customerAuthController').verifyOtp);
 
+// Rider auth routes
+router.post('/rider/send-otp', require('../controller/rider/riderAuthController').sendOtp);
+router.post('/rider/verify-otp', require('../controller/rider/riderAuthController').verifyOtp);
+
 // Public order placement for customer checkout
 router.post('/orders/place', require('../controller/order').placeOrder);
 
