@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getAdminToken } from '../../utils/auth';
 
 const initialCustomer = {
   name: '',
@@ -24,9 +25,15 @@ export default function CustomerManagement() {
   const [editPassword, setEditPassword] = useState('');
   const [editError, setEditError] = useState('');
 
-  const adminToken = localStorage.getItem('adminToken');
+  const adminToken = getAdminToken();
 
   const fetchCustomers = () => {
+    if (!adminToken) {
+      setError('Admin login required');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError('');
     fetch('/api/admin/customers', {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { setManagerSession } from '../utils/auth';
 
 // User login form for admin, manager, or staff
 export default function UserLogin({ onLogin, onBack }) {
@@ -17,7 +18,7 @@ export default function UserLogin({ onLogin, onBack }) {
       });
       const data = await res.json();
       if (res.ok && data.token) {
-        localStorage.setItem('managerToken', data.token);
+        setManagerSession(data.token);
         onLogin();
       } else {
         setError(data.message || 'Invalid credentials');

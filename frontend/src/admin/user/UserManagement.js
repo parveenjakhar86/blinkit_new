@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState } from "react";
+import { getAdminToken } from "../../utils/auth";
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -12,12 +13,19 @@ export default function UserManagement() {
   const [editUser, setEditUser] = useState(null);
   const [editError, setEditError] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const adminToken = getAdminToken();
 
   const fetchUsers = () => {
+    if (!adminToken) {
+      setError('Admin login required');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     fetch("/api/admin/users", {
       headers: {
-        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+        'Authorization': 'Bearer ' + adminToken
       }
     })
       .then((res) => {
@@ -44,7 +52,7 @@ export default function UserManagement() {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+        'Authorization': 'Bearer ' + adminToken
       },
       body: JSON.stringify({ status: newStatus })
     })
@@ -60,7 +68,7 @@ export default function UserManagement() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+        'Authorization': 'Bearer ' + adminToken
       },
       body: JSON.stringify(newUser)
     })
@@ -98,7 +106,7 @@ export default function UserManagement() {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+        'Authorization': 'Bearer ' + adminToken
       },
       body: JSON.stringify(updateData)
     })
@@ -124,7 +132,7 @@ export default function UserManagement() {
     fetch(`/api/admin/users/${user._id}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+        'Authorization': 'Bearer ' + adminToken
       }
     })
       .then(res => res.json())

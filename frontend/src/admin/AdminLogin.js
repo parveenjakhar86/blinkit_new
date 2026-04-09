@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { setAdminSession } from '../utils/auth';
 
 // Admin login form component
 // On successful login, calls onLogin() to enter dashboard
@@ -19,7 +20,7 @@ export default function AdminLogin({ onLogin, onManagerLogin }) {
       });
       const data = await res.json();
       if (res.ok && data.token) {
-        localStorage.setItem('adminToken', data.token);
+        setAdminSession(data.token);
         onLogin();
       } else {
         setError(data.message || 'Invalid credentials');

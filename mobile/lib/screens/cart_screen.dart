@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../services/api_service.dart';
+import '../widgets/address_bottom_sheet.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -14,14 +15,15 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
-  final _addressFocus = FocusNode();
+  final _stateCtrl = TextEditingController();
+  final _pinCodeCtrl = TextEditingController();
   String _paymentMethod = 'upi';
   bool _placing = false;
+  bool _redirectingToHome = false;
+  bool _orderPlaced = false;
 
   void _refreshFooter() {
     if (mounted) setState(() {});
@@ -33,14 +35,10 @@ class _CartScreenState extends State<CartScreen> {
     _nameCtrl.addListener(_refreshFooter);
     _phoneCtrl.addListener(_refreshFooter);
     _addressCtrl.addListener(_refreshFooter);
+    _stateCtrl.addListener(_refreshFooter);
+    _pinCodeCtrl.addListener(_refreshFooter);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final customer = context.read<AuthProvider>().customer;
-      if (customer != null) {
-        _nameCtrl.text = customer['name'] ?? '';
-        _emailCtrl.text = customer['email'] ?? '';
-        _phoneCtrl.text = customer['phone'] ?? '';
-        _addressCtrl.text = customer['address'] ?? '';
-      }
+      _loadSavedDeliveryDetails();
     });
   }
 
@@ -49,25 +47,56 @@ class _CartScreenState extends State<CartScreen> {
     _nameCtrl.removeListener(_refreshFooter);
     _phoneCtrl.removeListener(_refreshFooter);
     _addressCtrl.removeListener(_refreshFooter);
+    _stateCtrl.removeListener(_refreshFooter);
+    _pinCodeCtrl.removeListener(_refreshFooter);
     _nameCtrl.dispose();
-    _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
-    _addressFocus.dispose();
+    _stateCtrl.dispose();
+    _pinCodeCtrl.dispose();
     super.dispose();
   }
 
+  void _loadSavedDeliveryDetails() {
+    final auth = context.read<AuthProvider>();
+    final customer = auth.selectedAddress ?? auth.customer;
+    if (customer == null) return;
+
+    _nameCtrl.text = customer['name'] ?? '';
+    _phoneCtrl.text = customer['phone'] ?? '';
+    _addressCtrl.text = customer['address'] ?? '';
+    _stateCtrl.text = customer['state'] ?? '';
+    _pinCodeCtrl.text = customer['pinCode']?.toString() ?? '';
+  }
+
+  Future<void> _showAddressSheet() async {
+    await showAddressPickerSheet(context);
+    _loadSavedDeliveryDetails();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _placeOrder() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_hasSavedDeliveryDetails) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add a delivery address before placing the order.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final cart = context.read<CartProvider>();
+    final auth = context.read<AuthProvider>();
     setState(() => _placing = true);
     try {
       final result = await ApiService.placeOrder(
         customerDetails: {
           'name': _nameCtrl.text.trim(),
-          'email': _emailCtrl.text.trim(),
           'phone': _phoneCtrl.text.trim(),
           'address': _addressCtrl.text.trim(),
+          'state': _stateCtrl.text.trim(),
+          'pinCode': _pinCodeCtrl.text.trim(),
         },
         products: cart.items
             .map(
@@ -82,6 +111,14 @@ class _CartScreenState extends State<CartScreen> {
         paymentMethod: _paymentMethod,
         totalAmount: cart.total,
       );
+      await auth.updateCustomerProfile({
+        'name': _nameCtrl.text.trim(),
+        'phone': _phoneCtrl.text.trim(),
+        'address': _addressCtrl.text.trim(),
+        'state': _stateCtrl.text.trim(),
+        'pinCode': _pinCodeCtrl.text.trim(),
+      });
+      _orderPlaced = true;
       cart.clearCart();
       if (mounted) {
         Navigator.pushReplacementNamed(
@@ -156,6 +193,14 @@ class _CartScreenState extends State<CartScreen> {
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
 
+    if (cart.items.isEmpty && !_redirectingToHome && !_orderPlaced) {
+      _redirectingToHome = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -167,69 +212,50 @@ class _CartScreenState extends State<CartScreen> {
         elevation: 0,
       ),
       body: cart.items.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.shopping_cart_outlined,
-                    size: 80,
-                    color: Color(0xFF9D9D9D),
+          ? const SizedBox.shrink()
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 180),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  SizedBox(height: 12),
-                  Text(
-                    'Your cart is empty',
-                    style: TextStyle(fontSize: 18, color: Color(0xFF777777)),
-                  ),
-                ],
-              ),
-            )
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 180),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.timelapse_rounded,
-                              color: Color(0xFF5F7C4A),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.timelapse_rounded,
+                            color: Color(0xFF5F7C4A),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Free delivery in 9 minutes',
+                            style: TextStyle(
+                              fontSize: 26 / 1.4,
+                              fontWeight: FontWeight.w900,
                             ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Free delivery in 9 minutes',
-                              style: TextStyle(
-                                fontSize: 26 / 1.4,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Shipment of ${cart.itemCount} item${cart.itemCount > 1 ? 's' : ''}',
-                          style: const TextStyle(color: Color(0xFF666666)),
-                        ),
-                        const SizedBox(height: 10),
-                        ...cart.items.map((item) => _cartItemTile(item)),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Shipment of ${cart.itemCount} item${cart.itemCount > 1 ? 's' : ''}',
+                        style: const TextStyle(color: Color(0xFF666666)),
+                      ),
+                      const SizedBox(height: 10),
+                      ...cart.items.map((item) => _cartItemTile(item)),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  _deliveryCard(),
-                  const SizedBox(height: 12),
-                  _paymentCard(),
-                ],
-              ),
+                ),
+                const SizedBox(height: 12),
+                _deliveryCard(),
+                const SizedBox(height: 12),
+                _paymentCard(),
+              ],
             ),
       bottomNavigationBar: cart.items.isEmpty
           ? null
@@ -278,9 +304,9 @@ class _CartScreenState extends State<CartScreen> {
                                   ),
                                 ),
                                 Text(
-                                  _addressCtrl.text.trim().isEmpty
+                                  _fullAddress.isEmpty
                                       ? 'Add your delivery address'
-                                      : _addressCtrl.text.trim(),
+                                      : _fullAddress,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -292,9 +318,7 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () => FocusScope.of(
-                              context,
-                            ).requestFocus(_addressFocus),
+                            onPressed: _showAddressSheet,
                             child: const Text(
                               'Change',
                               style: TextStyle(
@@ -576,6 +600,10 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _deliveryCard() {
+    final selectedAddress = context.watch<AuthProvider>().selectedAddress;
+    final addressLabel =
+        (selectedAddress?['label'] ?? 'Home').toString().trim();
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -585,45 +613,45 @@ class _CartScreenState extends State<CartScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Delivering to Home',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          Text(
+            _hasSavedDeliveryDetails
+                ? 'Delivering to $addressLabel'
+                : 'Add Delivery Address',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
-          _field(_nameCtrl, 'Full Name', Icons.person_outline),
-          const SizedBox(height: 10),
-          _field(
-            _emailCtrl,
-            'Email',
-            Icons.email_outlined,
-            keyboard: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 10),
-          _field(
-            _phoneCtrl,
-            'Phone',
-            Icons.phone_outlined,
-            keyboard: TextInputType.phone,
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _addressCtrl,
-            focusNode: _addressFocus,
-            maxLines: 2,
-            onChanged: (_) => _refreshFooter(),
-            decoration: InputDecoration(
-              labelText: 'Delivery Address',
-              filled: true,
-              fillColor: const Color(0xFFF5F5F5),
-              prefixIcon: const Icon(Icons.location_on_outlined),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+          if (_hasSavedDeliveryDetails) ...[
+            Text(
+              _nameCtrl.text.trim(),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _phoneCtrl.text.trim(),
+              style: const TextStyle(color: Color(0xFF606060)),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _fullAddress,
+              style: const TextStyle(color: Color(0xFF606060), height: 1.4),
+            ),
+          ] else
+            const Text(
+              'Choose a saved address or add a new one from the address popup.',
+              style: TextStyle(color: Color(0xFF606060), height: 1.4),
+            ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _showAddressSheet,
+              icon: const Icon(Icons.edit_location_alt_outlined),
+              label: Text(
+                _hasSavedDeliveryDetails
+                    ? 'Change / Add another address'
+                    : 'Add address',
               ),
             ),
-            validator: (v) => (v == null || v.trim().isEmpty)
-                ? 'Enter Delivery Address'
-                : null,
           ),
         ],
       ),
@@ -751,29 +779,6 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _field(
-    TextEditingController ctrl,
-    String label,
-    IconData icon, {
-    TextInputType keyboard = TextInputType.text,
-  }) {
-    return TextFormField(
-      controller: ctrl,
-      keyboardType: keyboard,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: const Color(0xFFF5F5F5),
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter $label' : null,
-    );
-  }
-
   Widget _qtyBtn(IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -788,6 +793,24 @@ class _CartScreenState extends State<CartScreen> {
     if (_paymentMethod == 'upi') return 'UPI';
     if (_paymentMethod == 'credit_card') return 'Card';
     return 'COD';
+  }
+
+  String get _fullAddress {
+    final parts = [
+      _addressCtrl.text.trim(),
+      _stateCtrl.text.trim(),
+      _pinCodeCtrl.text.trim(),
+    ].where((value) => value.isNotEmpty);
+
+    return parts.join(', ');
+  }
+
+  bool get _hasSavedDeliveryDetails {
+    return _nameCtrl.text.trim().isNotEmpty &&
+        _phoneCtrl.text.trim().isNotEmpty &&
+        _addressCtrl.text.trim().isNotEmpty &&
+        _stateCtrl.text.trim().isNotEmpty &&
+        _pinCodeCtrl.text.trim().isNotEmpty;
   }
 
   Widget _paymentLeading() {

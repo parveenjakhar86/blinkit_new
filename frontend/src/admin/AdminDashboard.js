@@ -1,5 +1,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
+import { getAuthHeaders, getAuthRole } from "../utils/auth";
 
 const formatINR = (amount) =>
   new Intl.NumberFormat("en-IN", {
@@ -14,16 +15,18 @@ export default function AdminDashboard() {
   const [usersCount, setUsersCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem("adminToken") || localStorage.getItem("managerToken");
+  const role = getAuthRole();
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
         const [orderRes, productRes, userRes] = await Promise.all([
-          fetch("/api/admin/orders", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/admin/products", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/admin/users", { headers: { Authorization: `Bearer ${token}` } })
+          fetch("/api/admin/orders", { headers: getAuthHeaders(role) }),
+          fetch("/api/admin/products", { headers: getAuthHeaders(role) }),
+          role === 'admin'
+            ? fetch("/api/admin/users", { headers: getAuthHeaders('admin') })
+            : Promise.resolve({ ok: true, json: async () => [] })
         ]);
 
         const orderData = orderRes.ok ? await orderRes.json() : [];
@@ -39,7 +42,7 @@ export default function AdminDashboard() {
     };
 
     load();
-  }, [token]);
+  }, [role]);
 
   const stats = useMemo(() => {
     const today = new Date();

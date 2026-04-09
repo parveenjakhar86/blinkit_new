@@ -21,9 +21,19 @@ function calculateTotal(items = []) {
 function toDisplayOrder(orderDoc) {
   const order = orderDoc.toObject ? orderDoc.toObject() : orderDoc;
   const total = Number(order.totalAmount || calculateTotal(order.products || []));
+  const customerDetails = order.customerDetails || {};
+  const addressParts = [
+    customerDetails.address,
+    customerDetails.state,
+    customerDetails.pinCode,
+  ].filter((value) => String(value || '').trim().length > 0);
 
   return {
     ...order,
+    customerDetails: {
+      ...customerDetails,
+      fullAddress: addressParts.join(', '),
+    },
     total
   };
 }
@@ -61,8 +71,16 @@ exports.placeOrder = async (req, res) => {
     }
 
     const customerDetails = req.body.customerDetails || {};
-    if (!customerDetails.name || !customerDetails.address || !customerDetails.phone) {
-      return res.status(400).json({ message: 'Customer name, phone and address are required' });
+    if (
+      !customerDetails.name ||
+      !customerDetails.address ||
+      !customerDetails.phone ||
+      !customerDetails.state ||
+      !customerDetails.pinCode
+    ) {
+      return res.status(400).json({
+        message: 'Customer name, phone, address, state and pin code are required'
+      });
     }
 
     const paymentMethod = req.body.paymentMethod || 'cod';
@@ -77,6 +95,8 @@ exports.placeOrder = async (req, res) => {
         email: customerDetails.email || '',
         phone: customerDetails.phone,
         address: customerDetails.address,
+        state: customerDetails.state,
+        pinCode: String(customerDetails.pinCode || ''),
         image: customerDetails.image || ''
       },
       products,

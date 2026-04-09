@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/api_config.dart';
 import '../models/product.dart';
@@ -17,36 +18,92 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  static Duration get _requestTimeout => ApiConfig.isHostedBackend
-      ? const Duration(seconds: 45)
-      : const Duration(seconds: 12);
-  static Duration get _catalogRequestTimeout => ApiConfig.isHostedBackend
-      ? const Duration(seconds: 75)
-      : const Duration(seconds: 30);
+  static const String _productCacheKey = 'cachedProducts';
+  static String? _activeBaseUrl;
+  static Duration _requestTimeoutFor(String baseUrl) =>
+      ApiConfig.isHostedBaseUrl(baseUrl)
+    ? const Duration(seconds: 20)
+    : const Duration(seconds: 5);
+  static Duration _catalogRequestTimeoutFor(String baseUrl) =>
+      ApiConfig.isHostedBaseUrl(baseUrl)
+    ? const Duration(seconds: 20)
+    : const Duration(seconds: 4);
+  static Duration _healthTimeoutFor(String baseUrl) =>
+      ApiConfig.isHostedBaseUrl(baseUrl)
+    ? const Duration(seconds: 6)
+    : const Duration(seconds: 2);
   static const Duration _retryDelay = Duration(seconds: 2);
-  static bool _backendWarmedUp = false;
+
+  static List<String> get _baseCandidates {
+    final candidates = <String>[];
+    if (_activeBaseUrl != null) {
+      candidates.add(_activeBaseUrl!);
+    }
+
+    for (final baseUrl in ApiConfig.candidateBaseUrls) {
+      if (!candidates.contains(baseUrl)) {
+        candidates.add(baseUrl);
+      }
+    }
+
+    return candidates;
+  }
+
+  static Future<Uri> resolveUri(String path) async {
+    final baseUrl = await _resolveBaseUrl();
+    return Uri.parse(ApiConfig.endpointFor(baseUrl, path));
+  }
 
   static Future<List<Product>> fetchProducts() async {
-    try {
-      await _warmUpBackend();
-      final resp = await _getWithRetry(
-        Uri.parse(ApiConfig.products),
-        timeout: _catalogRequestTimeout,
-      );
+    ApiException? lastApiError;
+    final cachedProducts = await _readCachedProducts();
 
-      if (resp.statusCode == 200) {
-        final List data = jsonDecode(resp.body) as List;
-        return data
-            .map((e) => Product.fromJson(e as Map<String, dynamic>))
-            .toList();
+    try {
+      for (final baseUrl in _baseCandidates) {
+        try {
+          final resp = await _getWithRetry(
+            Uri.parse(ApiConfig.endpointFor(baseUrl, 'products')),
+            timeout: _catalogRequestTimeoutFor(baseUrl),
+          );
+
+          if (resp.statusCode == 200) {
+            _activeBaseUrl = baseUrl;
+            final List data = jsonDecode(resp.body) as List;
+            final products = data
+                .map((e) => Product.fromJson(e as Map<String, dynamic>))
+                .toList();
+            await _cacheProducts(resp.body);
+            return products;
+          }
+
+          lastApiError = ApiException(
+            _extractMessage(resp) ?? 'Unable to load products right now.',
+          );
+
+          if (!_shouldTryNextBase(resp.statusCode)) {
+            throw lastApiError;
+          }
+        } catch (error) {
+          if (!_shouldFallbackToAnotherBase(error)) {
+            rethrow;
+          }
+        }
       }
 
-      throw ApiException(
-        _extractMessage(resp) ?? 'Unable to load products right now.',
-      );
+      if (cachedProducts.isNotEmpty) {
+        return cachedProducts;
+      }
+
+      throw lastApiError ?? const ApiException('Unable to load products right now.');
     } on ApiException {
+      if (cachedProducts.isNotEmpty) {
+        return cachedProducts;
+      }
       rethrow;
     } catch (error) {
+      if (cachedProducts.isNotEmpty) {
+        return cachedProducts;
+      }
       throw _mapRequestError(
         error,
         fallbackMessage: 'Unable to load products right now.',
@@ -58,7 +115,7 @@ class ApiService {
     Uri uri, {
     required Duration timeout,
   }) async {
-    final maxAttempts = ApiConfig.isHostedBackend ? 3 : 2;
+    final maxAttempts = uri.scheme == 'https' ? 2 : 1;
     Object? lastError;
 
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
@@ -84,9 +141,9 @@ class ApiService {
     required double totalAmount,
   }) async {
     try {
-      await _warmUpBackend();
+      final uri = await resolveUri('orders/place');
       final resp = await _postWithRetry(
-        Uri.parse(ApiConfig.placeOrder),
+        uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'customerDetails': customerDetails,
@@ -94,7 +151,7 @@ class ApiService {
           'paymentMethod': paymentMethod,
           'totalAmount': totalAmount,
         }),
-        timeout: _requestTimeout,
+        timeout: _requestTimeoutFor(uri.replace(path: '').toString()),
       );
 
       final data = _decodeJsonMap(resp);
@@ -121,7 +178,7 @@ class ApiService {
     required String body,
     required Duration timeout,
   }) async {
-    final maxAttempts = ApiConfig.isHostedBackend ? 3 : 2;
+    final maxAttempts = uri.scheme == 'https' ? 2 : 1;
     Object? lastError;
 
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
@@ -142,18 +199,62 @@ class ApiService {
     throw lastError ?? ApiException('Unable to complete the request.');
   }
 
-  static Future<void> _warmUpBackend() async {
-    if (!ApiConfig.isHostedBackend || _backendWarmedUp) {
-      return;
+  static Future<String> _resolveBaseUrl() async {
+    if (_activeBaseUrl != null) {
+      return _activeBaseUrl!;
     }
 
+    for (final baseUrl in _baseCandidates) {
+      try {
+        final response = await http
+            .get(Uri.parse('${ApiConfig.serviceUrlFor(baseUrl)}/health'))
+            .timeout(_healthTimeoutFor(baseUrl));
+
+        if (response.statusCode == 200) {
+          _activeBaseUrl = baseUrl;
+          return baseUrl;
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    _activeBaseUrl = ApiConfig.candidateBaseUrls.last;
+    return _activeBaseUrl!;
+  }
+
+  static Future<void> _cacheProducts(String rawJson) async {
     try {
-      await http
-          .get(Uri.parse(ApiConfig.health))
-          .timeout(const Duration(seconds: 20));
-      _backendWarmedUp = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_productCacheKey, rawJson);
     } catch (_) {
-      // Ignore warm-up failures and let the main request handle retries.
+      // Ignore cache write failures.
+    }
+  }
+
+  static Future<List<Product>> _readCachedProducts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rawJson = prefs.getString(_productCacheKey);
+      if (rawJson == null || rawJson.trim().isEmpty) {
+        return const <Product>[];
+      }
+
+      final decoded = jsonDecode(rawJson);
+      if (decoded is! List) {
+        return const <Product>[];
+      }
+
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => Product.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          )
+          .toList();
+    } catch (_) {
+      return const <Product>[];
     }
   }
 
@@ -211,6 +312,18 @@ class ApiService {
     }
 
     return ApiException(fallbackMessage);
+  }
+
+  static bool _shouldTryNextBase(int statusCode) {
+    return statusCode >= 500 || statusCode == 404 || statusCode == 502;
+  }
+
+  static bool _shouldFallbackToAnotherBase(Object error) {
+    return error is TimeoutException ||
+        error is SocketException ||
+        error is http.ClientException ||
+        error.toString().toLowerCase().contains('connection refused') ||
+        error.toString().toLowerCase().contains('failed host lookup');
   }
 
   static bool _shouldRetry(Object error) {

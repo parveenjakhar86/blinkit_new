@@ -1,0 +1,9 @@
+frontend/node_modules/
+frontend/node_modules/.cache/
+frontend/build/
+mobile/build/
+mobile/.idea/
+mobile/android/.gradle/
+mobile/android/.kotlin/
+mobile/android/hs_err_pid*.log
+mobile/run.log

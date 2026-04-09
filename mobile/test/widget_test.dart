@@ -12,24 +12,20 @@ import 'package:blinkit_mobile/providers/auth_provider.dart';
 import 'package:blinkit_mobile/providers/cart_provider.dart';
 
 void main() {
-  testWidgets('App renders login screen smoke test', (WidgetTester tester) async {
+  testWidgets('App shell renders smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => CartProvider()),
         ],
-        child: const MaterialApp(home: Scaffold(body: Text('Blinkit'))),
+        child: const Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(child: Text('Blinkit')),
+        ),
       ),
     );
+
     expect(find.text('Blinkit'), findsOneWidget);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
   });
 }

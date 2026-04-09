@@ -1,5 +1,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
+import { getAuthHeaders, getAuthRole } from "../../utils/auth";
 
 const emptyForm = {
   name: "",
@@ -36,16 +37,14 @@ export default function ProductManagement() {
   const [editProduct, setEditProduct] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
-  const token = localStorage.getItem("adminToken") || localStorage.getItem("managerToken");
+  const role = getAuthRole();
 
   const fetchProducts = async () => {
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/admin/products", {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: getAuthHeaders(role)
       });
       const data = await res.json();
       if (!res.ok) {
@@ -125,7 +124,7 @@ export default function ProductManagement() {
         method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          ...getAuthHeaders(role)
         },
         body: JSON.stringify(payload)
       });
@@ -156,9 +155,7 @@ export default function ProductManagement() {
     try {
       const res = await fetch(`/api/admin/products/${productId}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: getAuthHeaders(role)
       });
       const data = await res.json();
       if (!res.ok) {
