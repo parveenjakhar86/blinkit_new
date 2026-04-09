@@ -37,10 +37,24 @@ app.get('*', (req, res, next) => {
 
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = process.env.PORT || 5007;
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
 
 // Connect to MongoDB and start server
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 15000,
+})
   .then(() => {
     app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
   })
-  .catch(err => console.error(err));
+  .catch(err => {
+    if (!MONGO_URI) {
+      console.error('MongoDB connection failed: MONGODB_URI or MONGO_URI is not set.');
+    } else {
+      console.error('MongoDB connection failed. Check Atlas Network Access and the connection string configured on Render.');
+      console.error(err);
+    }
+
+    process.exit(1);
+  });
