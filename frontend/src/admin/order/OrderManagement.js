@@ -118,6 +118,13 @@ function normalizeOrder(order) {
   };
 }
 
+function stopRowClick(handler) {
+  return (event) => {
+    event.stopPropagation();
+    handler();
+  };
+}
+
 export default function OrderManagement() {
   const [orders, setOrders] = useState([]);
   const [viewOrder, setViewOrder] = useState(null);
@@ -222,7 +229,11 @@ export default function OrderManagement() {
             </thead>
             <tbody>
               {orders.map((order) => (
-                <tr key={order.id} className="border-b hover:bg-gray-50">
+                <tr
+                  key={order.id}
+                  className="cursor-pointer border-b hover:bg-gray-50"
+                  onClick={() => handleView(order)}
+                >
                   <td className="py-2 pr-4 font-medium">#{order.id}</td>
                   <td className="py-2 pr-4">{order.customer}</td>
                   <td className="py-2 pr-4">
@@ -263,8 +274,18 @@ export default function OrderManagement() {
                   </td>
                   <td className="py-2 pr-4">{order.date}</td>
                   <td className="py-2 flex gap-2">
-                    <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition" onClick={() => handleView(order)}>View</button>
-                    <button className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition" onClick={() => handleUpdate(order)}>Update</button>
+                    <button
+                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition"
+                      onClick={stopRowClick(() => handleView(order))}
+                    >
+                      View
+                    </button>
+                    <button
+                      className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition"
+                      onClick={stopRowClick(() => handleUpdate(order))}
+                    >
+                      Update
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -278,15 +299,32 @@ export default function OrderManagement() {
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-bold mb-4">Order Details</h3>
-            <div className="mb-2"><b>Order ID:</b> #{viewOrder.id}</div>
-            <div className="mb-2"><b>Customer:</b> {viewOrder.customer}</div>
-            <div className="mb-2"><b>Phone:</b> {viewOrder.customerDetails?.phone || "-"}</div>
-            <div className="mb-2"><b>State:</b> {viewOrder.customerDetails?.state || "-"}</div>
-            <div className="mb-2"><b>Pin Code:</b> {viewOrder.customerDetails?.pinCode || "-"}</div>
-            <div className="mb-2"><b>Complete Address:</b> {viewOrder.customerDetails?.fullAddress || "-"}</div>
-            <div className="mb-2"><b>Amount:</b> {viewOrder.amount}</div>
-            <div className="mb-2"><b>Status:</b> {toTitleCase(viewOrder.status)}</div>
-            <div className="mb-2"><b>Date:</b> {viewOrder.date}</div>
+            <div className="grid gap-4 rounded-xl bg-gray-50 p-4 md:grid-cols-[120px_1fr]">
+              <div className="flex items-start justify-center">
+                {viewOrder.primaryImage ? (
+                  <img
+                    src={viewOrder.primaryImage}
+                    alt={viewOrder.items[0]?.name || "Ordered product"}
+                    className="h-28 w-28 rounded-xl border object-cover bg-white"
+                  />
+                ) : (
+                  <div className="flex h-28 w-28 items-center justify-center rounded-xl border bg-white text-sm text-gray-400">
+                    No image
+                  </div>
+                )}
+              </div>
+              <div className="grid gap-2 text-sm text-gray-700 md:grid-cols-2">
+                <div><b>Order ID:</b> #{viewOrder.id}</div>
+                <div><b>Customer:</b> {viewOrder.customer}</div>
+                <div><b>Phone:</b> {viewOrder.customerDetails?.phone || "-"}</div>
+                <div><b>Amount:</b> {viewOrder.amount}</div>
+                <div><b>Status:</b> {toTitleCase(viewOrder.status)}</div>
+                <div><b>Date:</b> {viewOrder.date}</div>
+                <div><b>State:</b> {viewOrder.customerDetails?.state || "-"}</div>
+                <div><b>Pin Code:</b> {viewOrder.customerDetails?.pinCode || "-"}</div>
+                <div className="md:col-span-2"><b>Complete Address:</b> {viewOrder.customerDetails?.fullAddress || "-"}</div>
+              </div>
+            </div>
             <div className="mt-4">
               <b>Products:</b>
               <div className="mt-2 overflow-hidden rounded-lg border border-gray-200">

@@ -110,6 +110,7 @@ class _CartScreenState extends State<CartScreen> {
             .toList(),
         paymentMethod: _paymentMethod,
         totalAmount: cart.total,
+        authToken: auth.token,
       );
       await auth.updateCustomerProfile({
         'name': _nameCtrl.text.trim(),

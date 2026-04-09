@@ -1,5 +1,6 @@
 // Order management controller
 const Order = require('../../model/Order');
+const jwt = require('jsonwebtoken');
 
 function normalizeItems(items = []) {
   return items.map((item) => ({
@@ -38,13 +39,49 @@ function toDisplayOrder(orderDoc) {
   };
 }
 
+function getCustomerClaims(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length)
+    : null;
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const claims = jwt.verify(token, process.env.JWT_SECRET);
+    return claims.role === 'customer' ? claims : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Get all orders
 exports.getAll = async (req, res) => {
   const orders = await Order.find()
     .populate('user')
+    .populate('customer')
     .populate('products.product')
     .sort({ createdAt: -1 });
   res.json(orders.map(toDisplayOrder));
+};
+
+exports.getCustomerOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({
+      $or: [
+        { customer: req.user.customerId },
+        { 'customerDetails.email': req.user.email },
+      ],
+    })
+      .populate('products.product')
+      .sort({ createdAt: -1 });
+
+    res.json(orders.map(toDisplayOrder));
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch customer orders' });
+  }
 };
 
 // Create order
@@ -89,7 +126,9 @@ exports.placeOrder = async (req, res) => {
       return res.status(400).json({ message: 'Invalid payment method' });
     }
 
+    const customerClaims = getCustomerClaims(req);
     const order = new Order({
+      customer: customerClaims?.customerId,
       customerDetails: {
         name: customerDetails.name,
         email: customerDetails.email || '',
@@ -124,6 +163,7 @@ exports.update = async (req, res) => {
 
   const order = await Order.findByIdAndUpdate(req.params.id, payload, { new: true })
     .populate('user')
+    .populate('customer')
     .populate('products.product');
 
   if (!order) {

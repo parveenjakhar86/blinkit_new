@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Product> _products = [];
   List<Product> _filtered = [];
+  List<Product> _previouslyOrderedProducts = [];
   bool _loading = true;
   String? _error;
   String _searchQuery = '';
@@ -34,6 +35,25 @@ class _HomeScreenState extends State<HomeScreen> {
   String _headerAddress = 'Fetching your location...';
   bool _resolvingLocation = true;
   int _activeBottomTab = 0;
+
+  IconData _iconForCategory(String cat) {
+    final lower = cat.toLowerCase();
+    if (lower == 'all') return Icons.grid_view_rounded;
+    if (lower.contains('summer')) return Icons.wb_sunny_outlined;
+    if (lower.contains('elect')) return Icons.headphones_outlined;
+    if (lower.contains('beauty')) {
+      return Icons.face_retouching_natural_outlined;
+    }
+    if (lower.contains('deco') || lower.contains('house')) {
+      return Icons.chair_outlined;
+    }
+    if (lower.contains('food') || lower.contains('grocery')) {
+      return Icons.local_grocery_store_outlined;
+    }
+    if (lower.contains('health')) return Icons.favorite_outline;
+    if (lower.contains('baby')) return Icons.child_friendly_outlined;
+    return Icons.storefront_outlined;
+  }
 
   @override
   void initState() {
@@ -182,12 +202,80 @@ class _HomeScreenState extends State<HomeScreen> {
         _applyFilterInternal();
         _loading = false;
       });
+      await _loadOrderHistory();
     } catch (e) {
       setState(() {
         _error = e.toString();
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadOrderHistory() async {
+    final auth = context.read<AuthProvider>();
+    final authToken = auth.token;
+
+    if (authToken == null || authToken.isEmpty) {
+      if (!mounted) return;
+      setState(() => _previouslyOrderedProducts = []);
+      return;
+    }
+
+    try {
+      final orders = await ApiService.fetchCustomerOrders(authToken);
+      final orderedProducts = _extractOrderedProducts(orders);
+      if (!mounted) return;
+      setState(() => _previouslyOrderedProducts = orderedProducts);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _previouslyOrderedProducts = []);
+    }
+  }
+
+  List<Product> _extractOrderedProducts(List<Map<String, dynamic>> orders) {
+    final orderedProducts = <Product>[];
+    final seenProductIds = <String>{};
+
+    for (final order in orders) {
+      final items = order['products'];
+      if (items is! List) {
+        continue;
+      }
+
+      for (final item in items.whereType<Map>()) {
+        final normalizedItem = item.map(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+        final productData = normalizedItem['product'];
+        final productMap = productData is Map
+            ? productData.map(
+                (key, value) => MapEntry(key.toString(), value),
+              )
+            : <String, dynamic>{};
+        final productId = (productMap['_id'] ?? normalizedItem['product'] ?? '')
+            .toString()
+            .trim();
+
+        if (productId.isEmpty || seenProductIds.contains(productId)) {
+          continue;
+        }
+
+        seenProductIds.add(productId);
+        orderedProducts.add(
+          Product.fromJson({
+            '_id': productId,
+            'name': productMap['name'] ?? normalizedItem['name'] ?? '',
+            'category': productMap['category'] ?? 'Previous Orders',
+            'price': productMap['price'] ?? normalizedItem['price'] ?? 0,
+            'image': productMap['image'],
+            'description': productMap['description'],
+            'stock': productMap['stock'] ?? 0,
+          }),
+        );
+      }
+    }
+
+    return orderedProducts;
   }
 
   void _applyFilter() => setState(_applyFilterInternal);
@@ -217,6 +305,19 @@ class _HomeScreenState extends State<HomeScreen> {
       grouped.putIfAbsent(p.category, () => []).add(p);
     }
     final sections = grouped.keys.toList()..sort();
+    final orderAgainProducts = _previouslyOrderedProducts.isNotEmpty
+        ? _previouslyOrderedProducts
+        : _filtered;
+    final orderAgainGrouped = <String, List<Product>>{};
+    for (final product in orderAgainProducts) {
+      orderAgainGrouped.putIfAbsent(product.category, () => []).add(product);
+    }
+    final categoryCards = orderAgainGrouped.entries.toList()
+      ..sort((left, right) => right.value.length.compareTo(left.value.length));
+    final previousProducts = orderAgainProducts.take(12).toList();
+    final isHomeTab = _activeBottomTab == 0;
+    final isOrderAgainTab = _activeBottomTab == 1;
+    final isCategoriesTab = _activeBottomTab == 2;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F3E8),
@@ -230,27 +331,40 @@ class _HomeScreenState extends State<HomeScreen> {
               controller: _scrollController,
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader()),
-                SliverToBoxAdapter(
-                  child: Container(
-                    key: _categorySectionKey,
-                    child: _buildCategoryTabs(),
-                  ),
-                ),
-                if (_filtered.isNotEmpty)
+                if (isHomeTab) ...[
                   SliverToBoxAdapter(
                     child: Container(
-                      key: _orderAgainSectionKey,
-                      child: _ProductSection(
-                        title: 'Frequently bought',
-                        products: _filtered.take(10).toList(),
-                      ),
+                      key: _categorySectionKey,
+                      child: _buildCategoryTabs(),
                     ),
                   ),
-                for (final s in sections)
+                  if (_filtered.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        key: _orderAgainSectionKey,
+                        child: _ProductSection(
+                          title: 'Frequently bought',
+                          products: _filtered.take(10).toList(),
+                        ),
+                      ),
+                    ),
+                  for (final s in sections)
+                    SliverToBoxAdapter(
+                      child: _ProductSection(title: s, products: grouped[s]!),
+                    ),
+                ],
+                if (isOrderAgainTab)
                   SliverToBoxAdapter(
-                    child: _ProductSection(title: s, products: grouped[s]!),
+                    child: _buildOrderAgainView(
+                      categoryCards: categoryCards,
+                      previousProducts: previousProducts,
+                    ),
                   ),
-                if (_filtered.isEmpty)
+                if (isCategoriesTab)
+                  SliverToBoxAdapter(
+                    child: _buildCategoriesView(categoryCards),
+                  ),
+                if (_filtered.isEmpty && isHomeTab)
                   const SliverFillRemaining(
                     child: Center(
                       child: Text(
@@ -266,19 +380,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _scrollToKey(GlobalKey key) async {
-    final targetContext = key.currentContext;
-    if (targetContext == null) return;
-
-    await Scrollable.ensureVisible(
-      targetContext,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      alignment: 0.08,
-    );
-  }
-
   Future<void> _handleBottomTabTap(int index) async {
+    if (index == 3) {
+      if (!mounted) return;
+      await Navigator.pushNamed(context, '/login');
+      if (!mounted) return;
+      setState(() => _activeBottomTab = 0);
+      return;
+    }
+
     setState(() => _activeBottomTab = index);
 
     if (index == 0) {
@@ -290,20 +400,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (index == 1) {
-      await _scrollToKey(_orderAgainSectionKey);
-      return;
-    }
-
-    if (index == 2) {
-      await _scrollToKey(_categorySectionKey);
-      return;
-    }
-
-    if (!mounted) return;
-    await Navigator.pushNamed(context, '/login');
-    if (!mounted) return;
-    setState(() => _activeBottomTab = 0);
+    await _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Widget _buildHeader() {
@@ -464,25 +565,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategoryTabs() {
-    IconData iconForCat(String cat) {
-      final lower = cat.toLowerCase();
-      if (lower == 'all') return Icons.grid_view_rounded;
-      if (lower.contains('summer')) return Icons.wb_sunny_outlined;
-      if (lower.contains('elect')) return Icons.headphones_outlined;
-      if (lower.contains('beauty')) {
-        return Icons.face_retouching_natural_outlined;
-      }
-      if (lower.contains('deco') || lower.contains('house')) {
-        return Icons.chair_outlined;
-      }
-      if (lower.contains('food') || lower.contains('grocery')) {
-        return Icons.local_grocery_store_outlined;
-      }
-      if (lower.contains('health')) return Icons.favorite_outline;
-      if (lower.contains('baby')) return Icons.child_friendly_outlined;
-      return Icons.storefront_outlined;
-    }
-
     return Container(
       color: const Color(0xFFF5F3E8),
       child: Column(
@@ -523,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          iconForCat(cat),
+                          _iconForCategory(cat),
                           size: 15,
                           color: selected ? Colors.white : Colors.black87,
                         ),
@@ -545,6 +627,173 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const Divider(height: 1, color: Color(0xFFE0E0E0)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildOrderAgainView({
+    required List<MapEntry<String, List<Product>>> categoryCards,
+    required List<Product> previousProducts,
+  }) {
+    return Container(
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Frequently bought',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: categoryCards
+                  .take(4)
+                  .map(
+                    (entry) => _CategorySummaryCard(
+                      title: entry.key,
+                      products: entry.value.take(3).toList(),
+                      extraCount: entry.value.length > 3
+                          ? entry.value.length - 3
+                          : 0,
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 30),
+            const Text(
+              'Previously Bought',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (previousProducts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No previous items available yet.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: previousProducts.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.58,
+                ),
+                itemBuilder: (_, index) => _ProductCard(
+                  product: previousProducts[index],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoriesView(List<MapEntry<String, List<Product>>> categories) {
+    return Container(
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'All categories',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 14),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: categories.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.1,
+              ),
+              itemBuilder: (_, index) {
+                final entry = categories[index];
+                return InkWell(
+                  onTap: () {
+                    setState(() {
+                      _selectedCategory = entry.key;
+                      _activeBottomTab = 0;
+                      _applyFilter();
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(22),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6FBF8),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFE3E7E3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            _iconForCategory(entry.key),
+                            color: const Color(0xFF0C831F),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          entry.key,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${entry.value.length} items',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1133,6 +1382,135 @@ class _ProductCard extends StatelessWidget {
             fontWeight: FontWeight.w900,
             color: _letterColors[idx].withAlpha(46),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategorySummaryCard extends StatelessWidget {
+  final String title;
+  final List<Product> products;
+  final int extraCount;
+
+  const _CategorySummaryCard({
+    required this.title,
+    required this.products,
+    required this.extraCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 152,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF7F7),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 80,
+            child: Stack(
+              children: [
+                for (var index = 0; index < products.length; index++)
+                  Positioned(
+                    left: index * 42,
+                    child: _CategorySummaryThumb(product: products[index]),
+                  ),
+                if (extraCount > 0)
+                  Positioned(
+                    left: 28,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '+$extraCount more',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF237A61),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF232323),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategorySummaryThumb extends StatelessWidget {
+  final Product product;
+
+  const _CategorySummaryThumb({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = product.image != null && product.image!.startsWith('http');
+
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE7ECEA)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: hasImage
+            ? CachedNetworkImage(
+                imageUrl: product.image!,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => _CategorySummaryFallback(name: product.name),
+                errorWidget: (_, _, _) => _CategorySummaryFallback(name: product.name),
+              )
+            : _CategorySummaryFallback(name: product.name),
+      ),
+    );
+  }
+}
+
+class _CategorySummaryFallback extends StatelessWidget {
+  final String name;
+
+  const _CategorySummaryFallback({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF5F7F8),
+      alignment: Alignment.center,
+      child: Text(
+        name.isEmpty ? '?' : name[0].toUpperCase(),
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF0C831F),
         ),
       ),
     );

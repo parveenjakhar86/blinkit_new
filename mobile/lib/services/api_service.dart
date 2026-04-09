@@ -111,16 +111,71 @@ class ApiService {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> fetchCustomerOrders(
+    String authToken,
+  ) async {
+    ApiException? lastApiError;
+
+    try {
+      for (final baseUrl in _baseCandidates) {
+        try {
+          final resp = await _getWithRetry(
+            Uri.parse(ApiConfig.endpointFor(baseUrl, 'customer/orders')),
+            timeout: _catalogRequestTimeoutFor(baseUrl),
+            headers: {'Authorization': 'Bearer $authToken'},
+          );
+
+          if (resp.statusCode == 200) {
+            _activeBaseUrl = baseUrl;
+            final decoded = jsonDecode(resp.body);
+            if (decoded is List) {
+              return decoded
+                  .whereType<Map>()
+                  .map(
+                    (item) => item.map(
+                      (key, value) => MapEntry(key.toString(), value),
+                    ),
+                  )
+                  .toList();
+            }
+            return const <Map<String, dynamic>>[];
+          }
+
+          lastApiError = ApiException(
+            _extractMessage(resp) ?? 'Unable to load order history right now.',
+          );
+          if (!_shouldTryNextBase(resp.statusCode)) {
+            throw lastApiError;
+          }
+        } catch (error) {
+          if (!_shouldFallbackToAnotherBase(error)) {
+            rethrow;
+          }
+        }
+      }
+
+      throw lastApiError ?? const ApiException('Unable to load order history right now.');
+    } on ApiException {
+      rethrow;
+    } catch (error) {
+      throw _mapRequestError(
+        error,
+        fallbackMessage: 'Unable to load order history right now.',
+      );
+    }
+  }
+
   static Future<http.Response> _getWithRetry(
     Uri uri, {
     required Duration timeout,
+    Map<String, String>? headers,
   }) async {
     final maxAttempts = uri.scheme == 'https' ? 2 : 1;
     Object? lastError;
 
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        return await http.get(uri).timeout(timeout);
+        return await http.get(uri, headers: headers).timeout(timeout);
       } catch (error) {
         lastError = error;
         if (!_shouldRetry(error) || attempt == maxAttempts - 1) {
@@ -139,12 +194,17 @@ class ApiService {
     required List<Map<String, dynamic>> products,
     required String paymentMethod,
     required double totalAmount,
+    String? authToken,
   }) async {
     try {
       final uri = await resolveUri('orders/place');
       final resp = await _postWithRetry(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (authToken != null && authToken.isNotEmpty)
+            'Authorization': 'Bearer $authToken',
+        },
         body: jsonEncode({
           'customerDetails': customerDetails,
           'products': products,
